@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Test() {
   const chats = [
@@ -7,6 +8,7 @@ export default function Test() {
       id: 1,
       name: "Deyby",
       initials: "DY",
+      link: "/secondpage",
       active: true,
       messages: [
         { from: "Deyby", text: "Feh logo atolou o carro" },
@@ -17,6 +19,7 @@ export default function Test() {
       id: 2,
       name: "Miguel",
       initials: "MI",
+      link: "/test",
       messages: [
         { from: "Miguel", text: "Menininho é chatão..." },
         { from: "Você", text: "Ele é chato demais mesmo" },
@@ -32,7 +35,6 @@ export default function Test() {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      {/* Sidebar */}
       <aside
         style={{
           width: "260px",
@@ -45,8 +47,9 @@ export default function Test() {
       >
         <h2 style={{ fontSize: "18px", marginBottom: "1rem" }}>Conversas</h2>
         {chats.map((chat) => (
+          <Link href={chat.link} passHref key={chat.id}>
           <div
-            key={chat.id}
+           // key={chat.id}
             onClick={() => selecionarChat(chat)}
             style={{
               background:
@@ -76,8 +79,10 @@ export default function Test() {
             >
               {chat.initials}
             </div>
+            
             <div>{chat.name}</div>
           </div>
+          </Link>
         ))}
       </aside>
 
