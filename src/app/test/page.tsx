@@ -1,42 +1,58 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 type Mensagem = {
   from: string;
-  text: string;
+  text?: string;
   dataHora?: string;
+  imagem?: string;
 };
 
-export default function ChatMi() {
-  const mensagensIniciais: Mensagem[] = [
-    {
-      from: "Miguel",
-      text: "Oi, tudo bem? Como posso te ajudar hoje?",
-      dataHora: "06/07/2025 14:30",
-    },
-    {
-      from: "Você",
-      text: "Oi Miguel, tudo certo! Estou com uma dúvida sobre o produto X.",
-      dataHora: "06/07/2025 14:32",
-    },
-  ];
+const mensagensFixas: Mensagem[] = [
+  {
+    from: "Miguel",
+    text: "Oi, tudo bem? Como posso te ajudar hoje?",
+    dataHora: "06/07/2025 14:30",
+  },
+  {
+    from: "Você",
+    text: "Oi Miguel, tudo certo! Estou com uma dúvida sobre o produto X.",
+    dataHora: "06/07/2025 14:32",
+  },
+];
 
-  const [mensagens, setMensagens] = useState<Mensagem[]>(() => {
-    if (typeof window !== "undefined") {
-      const salvas = localStorage.getItem("Chat-Mi");
-      return salvas ? JSON.parse(salvas) : mensagensIniciais;
-    }
-    return mensagensIniciais;
-  });
+export default function ChatMi() {
+  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [novaMensagem, setNovaMensagem] = useState("");
+  const [imagemSelecionada, setImagemSelecionada] = useState<string | null>(null);
+  const mensagensRef = useRef<HTMLDivElement>(null);
+  const storageKey = "chat-Mi";
+
+  const rolarParaBaixo = () => {
+    mensagensRef.current?.scrollTo({ top: mensagensRef.current.scrollHeight, behavior: "smooth" });
+  };
 
   useEffect(() => {
-    localStorage.setItem("Chat-Mi", JSON.stringify(mensagens));
+    const salvas = localStorage.getItem(storageKey);
+    let carregadas: Mensagem[] = [];
+
+    try {
+      if (salvas) carregadas = JSON.parse(salvas);
+    } catch {}
+
+    setMensagens([...mensagensFixas, ...carregadas]);
+  }, []);
+
+  useEffect(() => {
+    if (mensagens.length > mensagensFixas.length) {
+      const dinamicas = mensagens.slice(mensagensFixas.length);
+      localStorage.setItem(storageKey, JSON.stringify(dinamicas));
+    }
+    rolarParaBaixo();
   }, [mensagens]);
 
-  const [novaMensagem, setNovaMensagem] = useState("");
-
   const enviarMensagem = () => {
-    if (novaMensagem.trim() === "") return;
+    if (!novaMensagem.trim() && !imagemSelecionada) return;
 
     const agora = new Date();
     const data = agora.toLocaleDateString("pt-BR");
@@ -45,21 +61,33 @@ export default function ChatMi() {
       minute: "2-digit",
     });
 
-    const dataHoraCompleta = `${data} ${hora}`;
+    const nova: Mensagem = {
+      from: "Você",
+      dataHora: `${data} ${hora}`,
+      text: novaMensagem.trim() || undefined,
+      imagem: imagemSelecionada || undefined,
+    };
 
-    setMensagens([
-      ...mensagens,
-      { from: "Você", text: novaMensagem, dataHora: dataHoraCompleta },
-    ]);
+    setMensagens((antigas) => [...antigas, nova]);
     setNovaMensagem("");
+    setImagemSelecionada(null);
   };
 
   const apagarMensagem = (index: number) => {
-    setMensagens(mensagens.filter((_, i) => i !== index));
+    if (index < mensagensFixas.length) return;
+    setMensagens((antigas) => antigas.filter((_, i) => i !== index));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") enviarMensagem();
+  };
+
+  const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const imagemURL = URL.createObjectURL(file);
+      setImagemSelecionada(imagemURL);
+    }
   };
 
   return (
@@ -95,9 +123,7 @@ export default function ChatMi() {
           MI
         </div>
         <div>
-          <div
-            style={{ fontWeight: "bold", fontSize: "1.1rem", color: "black" }}
-          >
+          <div style={{ fontWeight: "bold", fontSize: "1.1rem", color: "black" }}>
             Miguel
           </div>
           <div style={{ fontSize: "0.8rem", color: "gray" }}>Online</div>
@@ -105,9 +131,11 @@ export default function ChatMi() {
       </div>
 
       <div
+        ref={mensagensRef}
         style={{
           flex: 1,
           padding: "1rem",
+          paddingBottom: "80px",
           backgroundColor: "#f5f5f5",
           overflowY: "auto",
         }}
@@ -122,37 +150,57 @@ export default function ChatMi() {
           >
             <div
               style={{
+                position: "relative",
                 display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 backgroundColor: msg.from === "Você" ? "#217aff" : "#ddd",
                 color: msg.from === "Você" ? "white" : "black",
-                padding: "10px 12px",
+                padding: msg.from === "Você" ? "10px 40px 10px 12px" : "10px 12px",
                 borderRadius: "10px",
                 maxWidth: "60%",
                 gap: "8px",
+                wordBreak: "break-word",
+                whiteSpace: "normal",
               }}
             >
-              <div style={{ flexGrow: 1 }}>
+              <div style={{ alignSelf: "flex-start" }}>
                 <strong>{msg.from}:</strong> {msg.text}
-                {msg.dataHora && (
-                  <div
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#ccc",
-                      marginTop: "4px",
-                      textAlign: "right",
-                    }}
-                  >
-                    {msg.dataHora}
-                  </div>
-                )}
               </div>
+
+              {msg.imagem && (
+                <img
+                  src={msg.imagem}
+                  alt="Imagem enviada"
+                  style={{
+                    maxWidth: "100%",
+                    borderRadius: "8px",
+                    marginTop: "-4px",
+                  }}
+                />
+              )}
+
+              {msg.dataHora && (
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: msg.from === "Você" ? "#ccc" : "#555",
+                    marginTop: "4px",
+                    textAlign: "right",
+                    width: "100%",
+                  }}
+                >
+                  {msg.dataHora}
+                </div>
+              )}
 
               {msg.from === "Você" && (
                 <button
                   onClick={() => apagarMensagem(index)}
                   style={{
+                    position: "absolute",
+                    bottom: "4px",
+                    right: "8px",
                     background: "transparent",
                     border: "none",
                     color: "white",
@@ -161,7 +209,6 @@ export default function ChatMi() {
                     fontSize: "16px",
                     userSelect: "none",
                     padding: 0,
-                    marginLeft: "8px",
                     lineHeight: 1,
                   }}
                   aria-label="Apagar mensagem"
@@ -181,10 +228,57 @@ export default function ChatMi() {
           backgroundColor: "#fff",
           borderTop: "1px solid #ccc",
           display: "flex",
-          position: "sticky",
-          bottom: 0,
+          alignItems: "center",
+          position: "fixed",
+          bottom: "10px",
+          left: 0,
+          right: 0,
+          color: "black",
+          maxWidth: "60%",
+          margin: "0 auto",
+          borderRadius: "8px",
+          boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+          zIndex: 20,
+          gap: "10px",
         }}
       >
+        <label
+          htmlFor="input-imagem"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "8px 12px",
+            backgroundColor: "#eee",
+            borderRadius: 6,
+            cursor: "pointer",
+            marginRight: "10px",
+            fontSize: "14px",
+          }}
+        >
+          📎 Anexar
+        </label>
+        <input
+          id="input-imagem"
+          type="file"
+          accept="image/*"
+          onChange={handleImagemChange}
+          style={{ display: "none" }}
+        />
+
+        {imagemSelecionada && (
+          <img
+            src={imagemSelecionada}
+            alt="Prévia"
+            style={{
+              width: "40px",
+              height: "40px",
+              objectFit: "cover",
+              borderRadius: "6px",
+              marginRight: "10px",
+            }}
+          />
+        )}
+
         <input
           type="text"
           value={novaMensagem}
@@ -200,6 +294,7 @@ export default function ChatMi() {
             color: "black",
           }}
         />
+
         <button
           onClick={enviarMensagem}
           style={{

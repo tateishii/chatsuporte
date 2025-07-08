@@ -41,6 +41,7 @@ export default function Test() {
           backgroundColor: "#2c2f48",
           color: "white",
           padding: "10px",
+          paddingTop: "80px",        // empurra o conteúdo para baixo
           overflowY: "auto",
           boxSizing: "border-box",
         }}
@@ -48,40 +49,38 @@ export default function Test() {
         <h2 style={{ fontSize: "18px", marginBottom: "1rem" }}>Conversas</h2>
         {chats.map((chat) => (
           <Link href={chat.link} passHref key={chat.id}>
-          <div
-           // key={chat.id}
-            onClick={() => selecionarChat(chat)}
-            style={{
-              background:
-                chatSelecionado.id === chat.id ? "#217aff" : "transparent",
-              padding: "10px",
-              marginBottom: "10px",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              cursor: "pointer",
-            }}
-          >
             <div
+              onClick={() => selecionarChat(chat)}
               style={{
-                backgroundColor: "#444",
-                width: "36px",
-                height: "36px",
-                borderRadius: "50%",
+                background:
+                  chatSelecionado.id === chat.id ? "#217aff" : "transparent",
+                padding: "10px",
+                marginBottom: "10px",
+                borderRadius: "8px",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontWeight: "bold",
-                fontSize: "14px",
-                color: "white",
-                marginRight: "10px",
+                cursor: "pointer",
               }}
             >
-              {chat.initials}
+              <div
+                style={{
+                  backgroundColor: "#444",
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  color: "white",
+                  marginRight: "10px",
+                }}
+              >
+                {chat.initials}
+              </div>
+              <div>{chat.name}</div>
             </div>
-            
-            <div>{chat.name}</div>
-          </div>
           </Link>
         ))}
       </aside>
@@ -95,7 +94,7 @@ export default function Test() {
           overflowY: "auto",
         }}
       >
-   
+        {/* ...seu conteúdo do chatDy aqui */}
       </main>
     </div>
   );
