@@ -1,4 +1,5 @@
 "use client";
+import { MissingStaticPage } from "next/dist/shared/lib/utils";
 import React, { useState, useEffect, useRef } from "react";
 
 type Mensagem = {
@@ -6,6 +7,8 @@ type Mensagem = {
   text?: string;
   dataHora?: string;
   imagem?: string;
+  timestamp: number;
+  id?: number;
 };
 
 const mensagensFixas: Mensagem[] = [
@@ -13,11 +16,13 @@ const mensagensFixas: Mensagem[] = [
     from: "Miguel",
     text: "Oi, tudo bem? Como posso te ajudar hoje?",
     dataHora: "06/07/2025 14:30",
+    timestamp: Date.now() - 5 * 60 * 1000,
   },
   {
     from: "Você",
     text: "Oi Miguel, tudo certo! Estou com uma dúvida sobre o produto X.",
     dataHora: "06/07/2025 14:32",
+    timestamp: Date.now() - 4 * 60 * 1000,
   },
 ];
 
@@ -26,32 +31,39 @@ export default function ChatMi() {
   const [novaMensagem, setNovaMensagem] = useState("");
   const [imagemSelecionada, setImagemSelecionada] = useState<string | null>(null);
   const mensagensRef = useRef<HTMLDivElement>(null);
-  const storageKey = "chat-Mi";
 
   const rolarParaBaixo = () => {
     mensagensRef.current?.scrollTo({ top: mensagensRef.current.scrollHeight, behavior: "smooth" });
   };
 
   useEffect(() => {
-    const salvas = localStorage.getItem(storageKey);
-    let carregadas: Mensagem[] = [];
+    const carregarMensagens = async () => {
+      try {
+        const resp = await fetch("http://localhost:3001/messages?chatId=mi");
+        const data = await resp.json();
 
-    try {
-      if (salvas) carregadas = JSON.parse(salvas);
-    } catch {}
+        const convertidas: Mensagem[] = data.map((msg: any) => ({
+          from: msg.user,
+          text: msg.text,
+          dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
+          timestamp: new Date(msg.createdAt).getTime(),
+          id: msg.id,
+        }));
 
-    setMensagens([...mensagensFixas, ...carregadas]);
+        setMensagens([...mensagensFixas, ...convertidas]);
+      } catch (err) {
+        console.error("Erro ao buscar mensagens:", err);
+      }
+    };
+
+    carregarMensagens();
   }, []);
 
   useEffect(() => {
-    if (mensagens.length > mensagensFixas.length) {
-      const dinamicas = mensagens.slice(mensagensFixas.length);
-      localStorage.setItem(storageKey, JSON.stringify(dinamicas));
-    }
     rolarParaBaixo();
   }, [mensagens]);
 
-  const enviarMensagem = () => {
+  const enviarMensagem = async () => {
     if (!novaMensagem.trim() && !imagemSelecionada) return;
 
     const agora = new Date();
@@ -66,17 +78,47 @@ export default function ChatMi() {
       dataHora: `${data} ${hora}`,
       text: novaMensagem.trim() || undefined,
       imagem: imagemSelecionada || undefined,
+      timestamp: Date.now(),
     };
 
     setMensagens((antigas) => [...antigas, nova]);
+
+    try {
+      await fetch("http://localhost:3001/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+            user: "Você",
+            text: novaMensagem.trim(),
+            chatId: "mi",
+          }),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar mensagem:", error);
+    }
+
     setNovaMensagem("");
     setImagemSelecionada(null);
   };
 
-  const apagarMensagem = (index: number) => {
-    if (index < mensagensFixas.length) return;
+  const apagarMensagem = async (id: number, index: number) => {
+  if (index < mensagensFixas.length) return;
+
+  try {
+    const resposta = await fetch(`http://localhost:3001/messages/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (!resposta.ok) {
+      throw new Error('Erro ao apagar mensagem no backend');
+    }
+
     setMensagens((antigas) => antigas.filter((_, i) => i !== index));
-  };
+  } catch (error) {
+    console.error('Erro ao apagar mensagem:', error);
+  }
+};
+
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") enviarMensagem();
@@ -89,6 +131,15 @@ export default function ChatMi() {
       setImagemSelecionada(imagemURL);
     }
   };
+
+  const [agora, setAgora] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAgora(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -194,9 +245,9 @@ export default function ChatMi() {
                 </div>
               )}
 
-              {msg.from === "Você" && (
+              {msg.from === "Você" && agora - msg.timestamp <= 60000 && (
                 <button
-                  onClick={() => apagarMensagem(index)}
+                  onClick={() => apagarMensagem(msg.id!, index)}
                   style={{
                     position: "absolute",
                     bottom: "4px",

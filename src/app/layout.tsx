@@ -19,24 +19,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           height: "100vh",
         }}
       >
-        {/* Header fixo de 80px */}
         <Header />
-
-        {/* Container principal */}
         <div
           style={{
-            marginTop: "80px",                   // empurra abaixo do Header
+            marginTop: "80px",                   
             display: "flex",
             flex: 1,
-            height: "calc(100vh - 80px)",       // só o que sobra da tela
+            height: "calc(100vh - 80px)",      
           }}
         >
-          {/* Sidebar fixa na esquerda */}
-          <aside style={{ width: "250px" }}>
+          <aside style={{ 
+            width: "250px",
+            height: "100%", 
+            overflowY: "hidden",
+            }}>
             <Sidebar />
           </aside>
 
-          {/* Main: espaço restante, scroll interno */}
           <main
             style={{
               flex: 1,
