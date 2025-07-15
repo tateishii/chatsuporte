@@ -2,30 +2,30 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
+type Chat = {
+  id: string;
+  nome: string;
+  iniciais: string;
+};
+
 export default function Sidebar() {
-  const chats = [
-    { id: 1, name: "Deyby", initials: "DY", link: "/secondpage" },
-    { id: 2, name: "Miguel", initials: "MI", link: "/test" },
-  ];
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [naoLidas, setNaoLidas] = useState<{ [chatId: string]: boolean }>({});
+  const [chatSelecionadoId, setChatSelecionadoId] = useState<string | null>(null);
 
-  const [naoLidas, setNaoLidas] = useState<{ [chatId: number]: boolean }>({});
+  useEffect(() => {
+    const carregarChats = async () => {
+      try {
+        const resp = await fetch("http://localhost:3001/chats");
+        const data = await resp.json();
+        setChats(data);
+      } catch (err) {
+        console.error("Erro ao buscar chats:", err);
+      }
+    };
 
-  const [chatSelecionadoId, setChatSelecionadoId] = useState<number | null>(null);
-
-  const nomeParaId = chats.reduce((acc, chat) => {
-    acc[chat.name] = chat.id;
-    return acc;
-  }, {} as { [nome: string]: number });
-
-  const selecionarChat = (id: number) => {
-    setChatSelecionadoId(id);
-    setNaoLidas((prev) => ({
-      ...prev,
-      [id]: false,
-    }));
-    localStorage.setItem(`ultimoVisto-${id}`, Date.now().toString());
-  };
-
+    carregarChats();
+  }, []);
 
   useEffect(() => {
     const verificarNovasMensagens = async () => {
@@ -33,12 +33,11 @@ export default function Sidebar() {
         const resp = await fetch("http://localhost:3001/messages/last");
         const ultimas = await resp.json();
 
-        const novas: { [chatId: number]: boolean } = { ...naoLidas };
+        const novas: { [chatId: string]: boolean } = { ...naoLidas };
 
         ultimas.forEach((msg: any) => {
           const id = msg.chatId;
           const timestamp = new Date(msg.createdAt).getTime();
-
           const ultimoVisto = Number(localStorage.getItem(`ultimoVisto-${id}`)) || 0;
 
           if (id !== chatSelecionadoId && timestamp > ultimoVisto) {
@@ -57,6 +56,14 @@ export default function Sidebar() {
     return () => clearInterval(interval);
   }, [chatSelecionadoId]);
 
+  const selecionarChat = (id: string) => {
+    setChatSelecionadoId(id);
+    setNaoLidas((prev) => ({
+      ...prev,
+      [id]: false,
+    }));
+    localStorage.setItem(`ultimoVisto-${id}`, Date.now().toString());
+  };
 
   return (
     <aside
@@ -76,7 +83,7 @@ export default function Sidebar() {
       {chats.map((chat) => (
         <Link
           key={chat.id}
-          href={chat.link}
+          href={`/chat/${chat.id}`}
           onClick={() => selecionarChat(chat.id)}
           style={{
             background: chatSelecionadoId === chat.id ? "#217aff" : "transparent",
@@ -91,7 +98,7 @@ export default function Sidebar() {
             textDecoration: "none",
           }}
         >
-          <span>{chat.name}</span>
+          <span>{chat.nome}</span>
 
           {naoLidas[chat.id] && (
             <span

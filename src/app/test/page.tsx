@@ -1,5 +1,4 @@
 "use client";
-import { MissingStaticPage } from "next/dist/shared/lib/utils";
 import React, { useState, useEffect, useRef } from "react";
 
 type Mensagem = {
@@ -11,21 +10,6 @@ type Mensagem = {
   id?: number;
 };
 
-const mensagensFixas: Mensagem[] = [
-  {
-    from: "Miguel",
-    text: "Oi, tudo bem? Como posso te ajudar hoje?",
-    dataHora: "06/07/2025 14:30",
-    timestamp: Date.now() - 5 * 60 * 1000,
-  },
-  {
-    from: "Você",
-    text: "Oi Miguel, tudo certo! Estou com uma dúvida sobre o produto X.",
-    dataHora: "06/07/2025 14:32",
-    timestamp: Date.now() - 4 * 60 * 1000,
-  },
-];
-
 export default function ChatMi() {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [novaMensagem, setNovaMensagem] = useState("");
@@ -33,29 +17,32 @@ export default function ChatMi() {
   const mensagensRef = useRef<HTMLDivElement>(null);
 
   const rolarParaBaixo = () => {
-    mensagensRef.current?.scrollTo({ top: mensagensRef.current.scrollHeight, behavior: "smooth" });
+    mensagensRef.current?.scrollTo({
+      top: mensagensRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  };
+
+  const carregarMensagens = async () => {
+    try {
+      const resp = await fetch("http://localhost:3001/messages?chatId=mi");
+      const data = await resp.json();
+
+      const convertidas: Mensagem[] = data.map((msg: any) => ({
+        from: msg.user,
+        text: msg.text,
+        dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
+        timestamp: new Date(msg.createdAt).getTime(),
+        id: msg.id,
+      }));
+
+      setMensagens(convertidas);
+    } catch (erro) {
+      console.error("Erro ao buscar mensagens:", erro);
+    }
   };
 
   useEffect(() => {
-    const carregarMensagens = async () => {
-      try {
-        const resp = await fetch("http://localhost:3001/messages?chatId=mi");
-        const data = await resp.json();
-
-        const convertidas: Mensagem[] = data.map((msg: any) => ({
-          from: msg.user,
-          text: msg.text,
-          dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
-          timestamp: new Date(msg.createdAt).getTime(),
-          id: msg.id,
-        }));
-
-        setMensagens([...mensagensFixas, ...convertidas]);
-      } catch (err) {
-        console.error("Erro ao buscar mensagens:", err);
-      }
-    };
-
     carregarMensagens();
   }, []);
 
@@ -65,6 +52,11 @@ export default function ChatMi() {
 
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() && !imagemSelecionada) return;
+
+    if (imagemSelecionada) {
+      alert("⚠️ Envio de imagens ainda não está implementado no backend.");
+      return;
+    }
 
     const agora = new Date();
     const data = agora.toLocaleDateString("pt-BR");
@@ -84,15 +76,19 @@ export default function ChatMi() {
     setMensagens((antigas) => [...antigas, nova]);
 
     try {
-      await fetch("http://localhost:3001/messages", {
+      const resposta = await fetch("http://localhost:3001/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            user: "Você",
-            text: novaMensagem.trim(),
-            chatId: "mi",
-          }),
+        body: JSON.stringify({
+          user: "Você",
+          text: novaMensagem.trim(),
+          chatId: "mi",
+        }),
       });
+
+      if (!resposta.ok) throw new Error("Erro ao enviar mensagem");
+
+      await carregarMensagens();
     } catch (error) {
       console.error("Erro ao enviar mensagem:", error);
     }
@@ -101,24 +97,25 @@ export default function ChatMi() {
     setImagemSelecionada(null);
   };
 
-  const apagarMensagem = async (id: number, index: number) => {
-  if (index < mensagensFixas.length) return;
+  const apagarMensagem = async (id: number) => {
+    try {
+      const resposta = await fetch(`http://localhost:3001/messages/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ apagadaPor: "Você" }),
+      });
 
-  try {
-    const resposta = await fetch(`http://localhost:3001/messages/${id}`, {
-      method: 'DELETE',
-    });
+      if (!resposta.ok) {
+        throw new Error("Erro ao apagar mensagem no backend");
+      }
 
-    if (!resposta.ok) {
-      throw new Error('Erro ao apagar mensagem no backend');
+      await carregarMensagens();
+    } catch (error) {
+      console.error("Erro ao apagar mensagem:", error);
     }
-
-    setMensagens((antigas) => antigas.filter((_, i) => i !== index));
-  } catch (error) {
-    console.error('Erro ao apagar mensagem:', error);
-  }
-};
-
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") enviarMensagem();
@@ -191,9 +188,9 @@ export default function ChatMi() {
           overflowY: "auto",
         }}
       >
-        {mensagens.map((msg, index) => (
+        {mensagens.map((msg) => (
           <div
-            key={index}
+            key={msg.id ?? Math.random()}
             style={{
               marginBottom: "10px",
               textAlign: msg.from === "Você" ? "right" : "left",
@@ -247,7 +244,7 @@ export default function ChatMi() {
 
               {msg.from === "Você" && agora - msg.timestamp <= 60000 && (
                 <button
-                  onClick={() => apagarMensagem(msg.id!, index)}
+                  onClick={() => apagarMensagem(msg.id!)}
                   style={{
                     position: "absolute",
                     bottom: "4px",

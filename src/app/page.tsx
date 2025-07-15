@@ -39,18 +39,33 @@ export default function Chat() {
   const [chatSelecionado, setChatSelecionado] = useState<Chat | null>(null);
   const [novaMensagem, setNovaMensagem] = useState("");
 
-  const criarNovoChat = () => {
+  const criarNovoChat = async () => {
     const nome = prompt("Digite o nome do novo contato:");
     if (!nome || nome.trim() === "") return;
 
-    const novoChat: Chat = {
-      id: Date.now(),
-      name: nome.trim(),
-      messages: [],
-    };
+    const id = nome.toLowerCase().replace(/\s/g, "");
+    const iniciais = nome
+      .split(" ")
+      .map((parte) => parte[0])
+      .join("")
+      .toUpperCase();
 
-    setChats((prevChats) => [...prevChats, novoChat]);
-    setChatSelecionado(novoChat);
+    try {
+      const resp = await fetch("http://localhost:3001/chats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, nome, iniciais }),
+      });
+
+      if (!resp.ok) {
+        const erro = await resp.json();
+        throw new Error(erro.message || "Erro ao criar chat");
+      }
+
+      router.push(`/chat/${id}`);
+    } catch (error: any) {
+      alert("Erro ao criar chat:" + error.message);
+    }
   };
 
   const enviarMensagem = () => {
@@ -59,9 +74,9 @@ export default function Chat() {
     const novaLista = chats.map((chat) =>
       chat.id === chatSelecionado.id
         ? {
-            ...chat,
-            messages: [...chat.messages, { from: "Você", text: novaMensagem }],
-          }
+          ...chat,
+          messages: [...chat.messages, { from: "Você", text: novaMensagem }],
+        }
         : chat
     );
 

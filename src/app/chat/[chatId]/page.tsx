@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import { useParams } from "next/navigation";
 
 type Mensagem = {
   from: string;
@@ -10,7 +11,16 @@ type Mensagem = {
   id?: number;
 };
 
-export default function ChatDy() {
+type Chat = {
+  id: string;
+  nome: string;
+  iniciais: string;
+};
+
+export default function ChatDinamico() {
+  const { chatId } = useParams();
+
+  const [chat, setChat] = useState<Chat | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [novaMensagem, setNovaMensagem] = useState("");
   const [imagemSelecionada, setImagemSelecionada] = useState<string | null>(null);
@@ -19,32 +29,50 @@ export default function ChatDy() {
   const rolarParaBaixo = () => {
     mensagensRef.current?.scrollTo({
       top: mensagensRef.current.scrollHeight,
-      behavior: "smooth"
+      behavior: "smooth",
     });
   };
 
   useEffect(() => {
-    const carregarMensagens = async () => {
+    if (!chatId) return;
+
+    const fetchChat = async () => {
       try {
-        const resp = await fetch("http://localhost:3001/messages?chatId=dy");
+        const resp = await fetch(`http://localhost:3001/chats/${chatId}`);
+        if (!resp.ok) throw new Error("Chat não encontrado");
         const data = await resp.json();
-
-        const convertidas: Mensagem[] = data.map((msg: any) => ({
-          from: msg.user,
-          text: msg.text,
-          dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
-          timestamp: new Date(msg.createdAt).getTime(),
-          id: msg.id,
-        }));
-
-        setMensagens(convertidas);
-      } catch (err) {
-        console.error("Erro ao buscar mensagens:", err);
+        setChat(data);
+      } catch (error) {
+        console.error("Erro ao buscar dados do chat:", error);
       }
     };
 
+    fetchChat();
+  }, [chatId]);
+
+  const carregarMensagens = async () => {
+    if (!chatId) return;
+    try {
+      const resp = await fetch(`http://localhost:3001/messages?chatId=${chatId}`);
+      const data = await resp.json();
+
+      const convertidas: Mensagem[] = data.map((msg: any) => ({
+        from: msg.user,
+        text: msg.text,
+        dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
+        timestamp: new Date(msg.createdAt).getTime(),
+        id: msg.id,
+      }));
+
+      setMensagens(convertidas);
+    } catch (erro) {
+      console.error("Erro ao buscar mensagens:", erro);
+    }
+  };
+
+  useEffect(() => {
     carregarMensagens();
-  }, []);
+  }, [chatId]);
 
   useEffect(() => {
     rolarParaBaixo();
@@ -58,6 +86,23 @@ export default function ChatDy() {
       return;
     }
 
+    const agora = new Date();
+    const data = agora.toLocaleDateString("pt-BR");
+    const hora = agora.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const nova: Mensagem = {
+      from: "Você",
+      dataHora: `${data} ${hora}`,
+      text: novaMensagem.trim() || undefined,
+      imagem: imagemSelecionada || undefined,
+      timestamp: Date.now(),
+    };
+
+    setMensagens((antigas) => [...antigas, nova]);
+
     try {
       const resposta = await fetch("http://localhost:3001/messages", {
         method: "POST",
@@ -65,24 +110,13 @@ export default function ChatDy() {
         body: JSON.stringify({
           user: "Você",
           text: novaMensagem.trim(),
-          chatId: "dy",
+          chatId,
         }),
       });
 
       if (!resposta.ok) throw new Error("Erro ao enviar mensagem");
 
-      const mensagemCriada = await resposta.json();
-
-      setMensagens((antigas) => [
-        ...antigas,
-        {
-          from: mensagemCriada.user,
-          text: mensagemCriada.text,
-          dataHora: new Date(mensagemCriada.createdAt).toLocaleString("pt-BR"),
-          timestamp: new Date(mensagemCriada.createdAt).getTime(),
-          id: mensagemCriada.id,
-        },
-      ]);
+      await carregarMensagens();
     } catch (error) {
       console.error("Erro ao enviar mensagem:", error);
     }
@@ -94,23 +128,20 @@ export default function ChatDy() {
   const apagarMensagem = async (id: number) => {
     try {
       const resposta = await fetch(`http://localhost:3001/messages/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ apagadaPor: "Você" }),
       });
 
-      const resultado = await resposta.json();
-      console.log("Resposta do backend:", resultado, "Status:", resposta.status);
-
-      if (resposta.ok && resultado.sucesso) {
-        setMensagens((antigas) => antigas.filter((msg) => msg.id !== id));
-      } else {
-        console.error("Erro ao apagar:", resultado);
+      if (!resposta.ok) {
+        throw new Error("Erro ao apagar mensagem no backend");
       }
+
+      await carregarMensagens();
     } catch (error) {
-      console.error('Erro ao apagar mensagem:', error);
+      console.error("Erro ao apagar mensagem:", error);
     }
   };
 
@@ -134,6 +165,10 @@ export default function ChatDy() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  if (!chat) {
+    return <div>Carregando conversa...</div>;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -163,13 +198,14 @@ export default function ChatDy() {
             justifyContent: "center",
             fontWeight: "bold",
             fontSize: "1rem",
+            userSelect: "none",
           }}
         >
-          DY
+          {chat.iniciais}
         </div>
         <div>
           <div style={{ fontWeight: "bold", fontSize: "1.1rem", color: "black" }}>
-            Deyby
+            {chat.nome}
           </div>
           <div style={{ fontSize: "0.8rem", color: "gray" }}>Online</div>
         </div>
@@ -188,7 +224,10 @@ export default function ChatDy() {
         {mensagens.map((msg) => (
           <div
             key={msg.id ?? Math.random()}
-            style={{ marginBottom: "10px", textAlign: msg.from === "Você" ? "right" : "left" }}
+            style={{
+              marginBottom: "10px",
+              textAlign: msg.from === "Você" ? "right" : "left",
+            }}
           >
             <div
               style={{
