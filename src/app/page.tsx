@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 type Mensagem = {
@@ -17,56 +17,69 @@ type Chat = {
 export default function Chat() {
   const router = useRouter();
 
-  const [chats, setChats] = useState<Chat[]>([
-    {
-      id: 1,
-      name: "Deyby",
-      messages: [
-        { from: "Deyby", text: "Feh logo atolou o carro" },
-        { from: "Você", text: "Vixi é o Brian mesmo KKKAKJSAKJS" },
-      ],
-    },
-    {
-      id: 2,
-      name: "Miguel",
-      messages: [
-        { from: "Miguel", text: "Menininho é chatão..." },
-        { from: "Você", text: "Ele é chato demais mesmo" },
-      ],
-    },
-  ]);
+  let usuarioLogado = null;
+  if (typeof window !== "undefined") {
+    try {
+      usuarioLogado = JSON.parse(localStorage.getItem("user") || "null");
+    } catch (error) {
+      console.error("Erro ao ler usuário logado:", error);
+    }
+  }
+
+
+  useEffect(() => {
+    if (!usuarioLogado) return;
+
+    const carregarChats = async () => {
+      try {
+        const resp = await fetch(`http://192.168.0.165:3001/chats/chatsDoUsuario/${usuarioLogado.id}`);
+        const data = await resp.json();
+        setChats(data);
+      } catch (error) {
+        console.error("Erro ao carregar chats:", error);
+      }
+    };
+
+    carregarChats();
+  }, []);
+
+
+  const [chats, setChats] = useState<Chat[]>([]);
+
 
   const [chatSelecionado, setChatSelecionado] = useState<Chat | null>(null);
   const [novaMensagem, setNovaMensagem] = useState("");
 
   const criarNovoChat = async () => {
-    const nome = prompt("Digite o nome do novo contato:");
-    if (!nome || nome.trim() === "") return;
-
-    const id = nome.toLowerCase().replace(/\s/g, "");
-    const iniciais = nome
-      .split(" ")
-      .map((parte) => parte[0])
-      .join("")
-      .toUpperCase();
+    const usernameOutro = prompt("Digite o @username do contato:");
+    if (!usernameOutro || usernameOutro.trim() === "") return;
 
     try {
-      const resp = await fetch("http://localhost:3001/chats", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, nome, iniciais }),
-      });
-
-      if (!resp.ok) {
-        const erro = await resp.json();
-        throw new Error(erro.message || "Erro ao criar chat");
+      const respUser = await fetch(`http://192.168.0.165:3001/usuarios/${usernameOutro}`);
+      if (!respUser.ok) {
+        alert("Usuário não encontrado");
+        return;
       }
 
-      router.push(`/chat/${id}`);
+
+      const outroUsuario = await respUser.json();
+
+      const respChat = await fetch("http://192.168.0.165:3001/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user1: usuarioLogado.id,
+          user2: outroUsuario.id,
+        }),
+      });
+
+      const chat = await respChat.json();
+      router.push(`/chat/${chat.id}`);
     } catch (error: any) {
-      alert("Erro ao criar chat:" + error.message);
+      alert("Erro ao criar chat: " + error.message);
     }
   };
+
 
   const enviarMensagem = () => {
     if (novaMensagem.trim() === "" || !chatSelecionado) return;

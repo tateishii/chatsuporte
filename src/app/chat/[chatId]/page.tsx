@@ -1,6 +1,9 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
+import { io } from "socket.io-client";
+
+const socket = io("http://192.168.0.165:3001");
 
 type Mensagem = {
   from: string;
@@ -19,11 +22,10 @@ type Chat = {
 
 export default function ChatDinamico() {
   const { chatId } = useParams();
-
   const [chat, setChat] = useState<Chat | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [novaMensagem, setNovaMensagem] = useState("");
-  const [imagemSelecionada, setImagemSelecionada] = useState<string | null>(null);
+  const [imagemSelecionada, setImagemSelecionada] = useState<File | null>(null);
   const mensagensRef = useRef<HTMLDivElement>(null);
 
   const rolarParaBaixo = () => {
@@ -38,7 +40,7 @@ export default function ChatDinamico() {
 
     const fetchChat = async () => {
       try {
-        const resp = await fetch(`http://localhost:3001/chats/${chatId}`);
+        const resp = await fetch(`http://192.168.0.165:3001/chats/${chatId}`);
         if (!resp.ok) throw new Error("Chat não encontrado");
         const data = await resp.json();
         setChat(data);
@@ -53,12 +55,13 @@ export default function ChatDinamico() {
   const carregarMensagens = async () => {
     if (!chatId) return;
     try {
-      const resp = await fetch(`http://localhost:3001/messages?chatId=${chatId}`);
+      const resp = await fetch(`http://192.168.0.165:3001/messages?chatId=${chatId}`);
       const data = await resp.json();
 
       const convertidas: Mensagem[] = data.map((msg: any) => ({
         from: msg.user,
         text: msg.text,
+        imagem: msg.imagem ?? undefined,
         dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
         timestamp: new Date(msg.createdAt).getTime(),
         id: msg.id,
@@ -78,48 +81,65 @@ export default function ChatDinamico() {
     rolarParaBaixo();
   }, [mensagens]);
 
+  useEffect(() => {
+    if (!chatId) return;
+
+    const handler = (msg: any) => {
+      if (msg.chatId === chatId) {
+        const novaMensagemConvertida: Mensagem = {
+          from: msg.user,
+          text: msg.text,
+          imagem: msg.imagem ?? undefined,
+          dataHora: new Date(msg.createdAt).toLocaleString("pt-BR"),
+          timestamp: new Date(msg.createdAt).getTime(),
+          id: msg.id,
+        };
+
+        setMensagens((msgsAntigas) => [...msgsAntigas, novaMensagemConvertida]);
+      }
+    };
+
+    socket.on("novaMensagem", handler);
+
+    return () => {
+      socket.off("novaMensagem", handler);
+    };
+  }, [chatId]);
+
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() && !imagemSelecionada) return;
 
+    let imagemUrl: string | null = null;
+
     if (imagemSelecionada) {
-      alert("⚠️ Envio de imagens ainda não está implementado no backend.");
-      return;
+      try {
+        const formData = new FormData();
+        formData.append("imagem", imagemSelecionada, imagemSelecionada.name);
+
+        const resp = await fetch("http://192.168.0.165:3001/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!resp.ok) {
+          console.error("Erro ao enviar imagem");
+          return;
+        }
+
+        const data = await resp.json();
+        imagemUrl = data.url;
+      } catch (error) {
+        console.error("Erro no upload da imagem:", error);
+        return;
+      }
     }
 
-    const agora = new Date();
-    const data = agora.toLocaleDateString("pt-BR");
-    const hora = agora.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
+    socket.emit("novaMensagem", {
+      user: "Você",
+      text: novaMensagem.trim(),
+      chatId,
+      imagem: imagemUrl,
     });
-
-    const nova: Mensagem = {
-      from: "Você",
-      dataHora: `${data} ${hora}`,
-      text: novaMensagem.trim() || undefined,
-      imagem: imagemSelecionada || undefined,
-      timestamp: Date.now(),
-    };
-
-    setMensagens((antigas) => [...antigas, nova]);
-
-    try {
-      const resposta = await fetch("http://localhost:3001/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user: "Você",
-          text: novaMensagem.trim(),
-          chatId,
-        }),
-      });
-
-      if (!resposta.ok) throw new Error("Erro ao enviar mensagem");
-
-      await carregarMensagens();
-    } catch (error) {
-      console.error("Erro ao enviar mensagem:", error);
-    }
 
     setNovaMensagem("");
     setImagemSelecionada(null);
@@ -127,7 +147,7 @@ export default function ChatDinamico() {
 
   const apagarMensagem = async (id: number) => {
     try {
-      const resposta = await fetch(`http://localhost:3001/messages/${id}`, {
+      const resposta = await fetch(`http://192.168.0.165:3001/messages/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -152,8 +172,7 @@ export default function ChatDinamico() {
   const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const imagemURL = URL.createObjectURL(file);
-      setImagemSelecionada(imagemURL);
+      setImagemSelecionada(file);
     }
   };
 
@@ -348,7 +367,7 @@ export default function ChatDinamico() {
 
         {imagemSelecionada && (
           <img
-            src={imagemSelecionada}
+            src={URL.createObjectURL(imagemSelecionada)}
             alt="Prévia"
             style={{
               width: "40px",
